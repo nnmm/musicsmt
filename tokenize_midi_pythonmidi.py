@@ -1,3 +1,5 @@
+#!/usr/bin/python
+# coding=utf-8
 import midi
 
 def events_to_dict(chan):
@@ -9,20 +11,44 @@ def events_to_dict(chan):
     for e in allNoteEvents:
         if e.name == 'Note On' and e.velocity != 0:
             # if e.pitch in unmatchedNoteOnEvents.keys(): print("Note On twice")
-            unmatchedNoteOnEvents[e.pitch] = {"pitch": e.pitch, "velocity": e.velocity, "start": e.tick}
+            # You could also add e.velocity
+            unmatchedNoteOnEvents[e.pitch] = (e.tick, e.pitch)
         else:
-            # Find matching note
+            # Find matching note to this Note Off event
             if e.pitch in unmatchedNoteOnEvents.keys():
                 note = unmatchedNoteOnEvents[e.pitch]
                 del unmatchedNoteOnEvents[e.pitch]
-                note["end"] = e.tick
-                # if start time is strictly lower than everything (else) in unmatchedNoteOnEvents, first yield
-                # everything with lower start from queue and self
-                # else, append to queue
+                # Add the duration
+                note = note + (e.tick - note[0],)
+                queue.append(note)
+                queue.sort()
+                # If we have two simultaneous events, they will both go into unmatchedNoteOnEvents.
+                # Then, there will be matching Note Off events in some order.
+                # If the first one arrives, in will be added to the queue.
+                # Now we look if – by removing it from unmatchedNoteOnEvents – there are notes in queue
+                # that we can yield, i.e. whose start is < that of the earliest note in unmatchedNoteOnEvents.
+                # < vs <= matters if we have simultaneous notes: we want to wait until they are both in queue
+                # so queue.sort() sorts them in order of ascending pitch
+                unmatchedTuplesSorted = sorted(unmatchedNoteOnEvents.values())
+                if unmatchedTuplesSorted:
+                    earliest_unmatched_start = unmatchedTuplesSorted[0][0]
+                    cutoff_index = 0
+                    for i, n in enumerate(queue):
+                        if n[0] < earliest_unmatched_start:
+                            # There is no earlier note, yield
+                            yield n
+                            cutoff_index = cutoff_index + 1
+                    queue = queue[cutoff_index:]
+                else:
+                    # No unmatchedNoteOnEvents, so we can just yield the whole (sorted) queue
+                    for n in queue:
+                        yield n
+                    queue = []
             else:
                 # it happens, just ignore
                 # print("Note Off before Note On")
                 pass
+
 
 
 def notes_to_token(notes):
@@ -35,10 +61,10 @@ def notes_to_token(notes):
 def relativize(notes):
     # first item
     prev = next(notes)
-    prev["pitch_rel"] = 0
+    prev = prev + (0,)
     yield prev
     for n in notes:
-        n["pitch_rel"] = n["pitch"] - prev["pitch"]
+        n = n + (n[1] - prev[1],)
         yield n
         prev = n
 
@@ -47,14 +73,12 @@ def main():
     example_file = '/home/internet/Dropbox/Bachelorarbeit/Daten/canon.mid'
     pattern = midi.read_midifile(example_file)
     pattern.make_ticks_abs()
-    # sort by start
+
     # relative pitch
     prevstart = -1
-    for n in relativize(events_to_dict(pattern[1])):
-        if prevstart == n["start"]:
-            print("!"),
-        print(n)
-        prevstart = n["start"]
+    for i, n in enumerate(relativize(events_to_dict(pattern[2]))):
+        print(i, n)
+        prevstart = n[0]
 
 
 if __name__ == "__main__":
