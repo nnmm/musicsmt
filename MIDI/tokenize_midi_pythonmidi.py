@@ -54,7 +54,7 @@ def events_to_dict(chan):
 def notes_to_token(notes):
     strings = []
     for note in notes:
-        strings.append("p"+str(note["pitch"]) + "d" + str(note["end"]-note["start"]))
+        strings.append("p" + str(note[3]) + "d" + str(note[2]))
     return ''.join(strings)
 
 
@@ -74,11 +74,15 @@ def main():
     pattern = midi.read_midifile(example_file)
     pattern.make_ticks_abs()
 
-    # relative pitch
-    prevstart = -1
-    for i, n in enumerate(relativize(events_to_dict(pattern[2]))):
-        print(i, n)
-        prevstart = n[0]
+    notes = list(relativize(events_to_dict(pattern[2])))
+    i = 2
+    result = []
+    while i < len(notes):
+        result.append(notes_to_token(notes[i-2:i]))
+        i = i + 2
+    f = open('musictokens.txt', 'w')
+    f.write("\n".join(result))
+    f.close()
 
 
 if __name__ == "__main__":
