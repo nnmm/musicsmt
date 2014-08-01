@@ -28,46 +28,44 @@ class Music2Vec(Word2Vec):
         self.syn0 = array(other.syn0)
 
 
-    def plot_words(self, words):
+    def plot_words(self, words, subplot=None):
         from numpy import histogram2d
+        if not subplot:
+            plt.clf()
+            subplot = plt
         if not words:
             words = []
-            for i in xrange(1,10):
+            for i in xrange(7):
                 words.append(self.index2word[random.randint(len(self.vocab))])
 
         self.init_sims()
 
         x, y = self.project_data()
-        heatmap, xedges, yedges = histogram2d(x, y, bins=50)
+        heatmap, xedges, yedges = histogram2d(x, y, bins=100)
         extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]]
-        x, y = [], []
-        for w in words:
-            x.append(myPCA.Y[self.vocab[w].index, 0])
-            y.append(myPCA.Y[self.vocab[w].index, 1])
+        wordx, wordy = [x[self.vocab[w].index] for w in words], [y[self.vocab[w].index] for w in words]
 
-        plt.clf()
-        plt.imshow(heatmap.T, extent=extent, origin='lower')
-        plt.scatter(x, y, marker="s", color="white")
+        subplot.imshow(heatmap.T, extent=extent, origin='lower', cmap='binary')
+        subplot.scatter(wordx, wordy, marker="s", color='red')
         for i, label in enumerate(words):
-            plt.annotate(label, xy=(x[i], y[i]), color='white')
-        plt.show()
+            subplot.annotate(label, xy=(wordx[i], wordy[i]), color='red')
+        return subplot
 
-    def plot_frequencies(self):
+    def plot_frequencies(self, number=1000, subplot=None):
         from numpy import log
+        if not subplot:
+            plt.clf()
+            subplot = plt
         self.init_sims()
         x, y = self.project_data()
-        maxc = self.max_count()
-        plt.clf()
-        occ = []
-        for i in xrange(0, len(x)):
-            occ.append(log(log(self.vocab[self.index2word[i]].count)))
-
-        plt.scatter(x, y, lw=0, c=occ, cmap=plt.cm.get_cmap('OrRd'))
-        plt.title('PCA of all word vectors colored by log-frequency')
-        plt.show()
+        counts = [log(w.count) for w in self.vocab.values()]
+        # http://matplotlib.org/examples/color/colormaps_reference.html - OrRd
+        subplot.scatter(x[:number], y[:number], lw=0, c=counts[:number], cmap=plt.cm.get_cmap('winter'))
+        return subplot
 
     def project_data(self):
         from matplotlib.mlab import PCA
+        self.init_sims()
         myPCA = PCA(self.syn0norm)
         x = myPCA.Y[:, 0]
         y = myPCA.Y[:, 1]
@@ -81,8 +79,6 @@ class Music2Vec(Word2Vec):
         return maxcount
     
 
-    def random_test(self):
-        return random.randint(5)
 
 
 
@@ -104,17 +100,19 @@ class EmailCorpus(object):
                 yield tokenized_line
 
 
-class VectorTranslator(object):
+class Translator(object):
     """Given that we have two vector spaces whose vector identities are known, how can we translate new vectors?"""
     def __init__(self, model1, model2):
+        self.mnames = [model1, model2]
+        self.m = [Music2Vec.load(model1), Music2Vec.load(model2)]
         # list of words in ascending order of index
-        words_ordered = sorted(model1.vocab, key=lambda x: model1.vocab[x].index)
-        # Indices of words_ordered in model2
-        self.mapping = [model2.vocab[w].index for w in words_ordered]
-        model1.init_sims()
-        self.vec1 = model1.syn0norm
-        model2.init_sims()
-        self.vec2 = model2.syn0norm[self.mapping, :]
+        # words_ordered = sorted(model1.vocab, key=lambda x: model1.vocab[x].index)
+        # # Indices of words_ordered in model2
+        # self.mapping = [model2.vocab[w].index for w in words_ordered]
+        # model1.init_sims()
+        # self.vec1 = model1.syn0norm
+        # model2.init_sims()
+        # self.vec2 = model2.syn0norm[self.mapping, :]
 
     def simple_translate(self, vector):
         topn = 10
@@ -125,7 +123,23 @@ class VectorTranslator(object):
         result = [self.mapping[sim] for sim in best]
         return result[:topn]
 
+    def plot_test(self, number=1000):
+        from numpy import arange, log
+        import datetime
+        fig = plt.figure()
+        data = arange(900).reshape((30,30))
+        for i in range(0,2):
+            occ = [log(w.count) for w in self.m[i].vocab.values()]
+            px, py = self.m[i].project_data()
+            ax = fig.add_subplot(1,2,i+1)
+            ax.set_aspect('equal')
+            plt.title('PCA of ' + self.mnames[i])
+            # ax = self.m[i].plot_frequencies(subplot=ax)
+            ax = self.m[i].plot_words(words=None, subplot=ax)
+        plt.suptitle('Plot from ' + datetime.today())
+        plt.show()   
+
 
 if __name__ == '__main__':
-    m = Music2Vec.load('models/europarl_en_shuf1')
-    print m.plot_frequencies()
+    t = Translator('models/de_filtered', 'models/en_filtered')
+    t.plot_test()
