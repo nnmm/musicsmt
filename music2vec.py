@@ -1,6 +1,5 @@
-# import modules and set up logging
 from gensim.models.word2vec import *
-
+import matplotlib.pyplot as plt
 
 
 class Music2Vec(Word2Vec):
@@ -30,8 +29,6 @@ class Music2Vec(Word2Vec):
 
 
     def plot_words(self, words):
-        from matplotlib import pyplot
-        from matplotlib.mlab import PCA
         from numpy import histogram2d
         if not words:
             words = []
@@ -40,9 +37,7 @@ class Music2Vec(Word2Vec):
 
         self.init_sims()
 
-        myPCA = PCA(self.syn0norm)
-        x = myPCA.Y[:, 0]
-        y = myPCA.Y[:, 1]
+        x, y = self.project_data()
         heatmap, xedges, yedges = histogram2d(x, y, bins=50)
         extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]]
         x, y = [], []
@@ -50,13 +45,41 @@ class Music2Vec(Word2Vec):
             x.append(myPCA.Y[self.vocab[w].index, 0])
             y.append(myPCA.Y[self.vocab[w].index, 1])
 
-        pyplot.clf()
-        pyplot.imshow(heatmap.T, extent=extent, origin='lower')
-        pyplot.scatter(x, y, marker="s", color="white")
+        plt.clf()
+        plt.imshow(heatmap.T, extent=extent, origin='lower')
+        plt.scatter(x, y, marker="s", color="white")
         for i, label in enumerate(words):
-            pyplot.annotate(label, xy=(x[i], y[i]), color='white')
-        pyplot.show()
+            plt.annotate(label, xy=(x[i], y[i]), color='white')
+        plt.show()
 
+    def plot_frequencies(self):
+        from numpy import log
+        self.init_sims()
+        x, y = self.project_data()
+        maxc = self.max_count()
+        plt.clf()
+        occ = []
+        for i in xrange(0, len(x)):
+            occ.append(log(log(self.vocab[self.index2word[i]].count)))
+
+        plt.scatter(x, y, lw=0, c=occ, cmap=plt.cm.get_cmap('OrRd'))
+        plt.title('PCA of all word vectors colored by log-frequency')
+        plt.show()
+
+    def project_data(self):
+        from matplotlib.mlab import PCA
+        myPCA = PCA(self.syn0norm)
+        x = myPCA.Y[:, 0]
+        y = myPCA.Y[:, 1]
+        return x, y
+
+    def max_count(self):
+        maxcount = 0
+        for w in self.vocab.values():
+            if w.count > maxcount:
+                maxcount = w.count
+        return maxcount
+    
 
     def random_test(self):
         return random.randint(5)
@@ -101,3 +124,8 @@ class VectorTranslator(object):
         # ignore (don't return) words from the input
         result = [self.mapping[sim] for sim in best]
         return result[:topn]
+
+
+if __name__ == '__main__':
+    m = Music2Vec.load('models/europarl_en_shuf1')
+    print m.plot_frequencies()
