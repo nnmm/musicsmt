@@ -10,5 +10,3 @@ logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=lo
 m = []
 for i in range(1, len(argv)):
 	m.append(Music2Vec.load(config.model_dir + argv[i]))
-
-m[0].plot_linear_demo()
