@@ -2,7 +2,7 @@
 import math
 import numpy
 import scipy.linalg
-import scipy.optimize as opt
+import scipy.optimize
 
 
 class KernelCorrelation(object):
@@ -11,54 +11,44 @@ class KernelCorrelation(object):
 		super(KernelCorrelation, self).__init__()
 		self.model = model
 		self.scene = scene
-
-
-	def find_minimum(self):
-		x0 = numpy.zeros((self.scene.shape[0], self.model.shape[0]))
-		opt.minimize(self.cost_fun, x0)
-		return result.x
-
-
-	# calculate once and save
-	def p_S(self, x):
-		N = len(self.scene)
-		# this iterates through the rows of scene
-		sum(kernel(x, point) for point in self.scene)/N
-
-
-	def p_M(self, x, transform):
-		N = len(self.scene)
-		# this iterates through the rows of scene
-		sum(kernel(x, transform.dot(point)) for point in self.model)/N
-	
-
-	def kernel_correlation(self, xi, xj):
-		# D = float(x.shape[0])
-		D = float(xi.shape[0])
-		variance = 1
-		diff = xi - xj
-		return math.pow(2*math.pi*variance, -D/2)*math.exp(-diff.dot(diff)/(2*variance))
-
-
-	def kernel(self, x, xi):
-		# D = float(x.shape[0])
-		D = float(x.shape[0])
-		variance = 1
-		diff = x - xi
-		return math.pow(math.pi*variance, -D/2)*math.exp(-diff.dot(diff)/variance)
+		self.transform_shape = (self.scene.shape[1], self.model.shape[1])
+		# n(n-1)/2 - (n-m)(n-m-1)/2
+		self.transform_dof = int(self.transform_shape[0]*0.5*(2*self.transform_shape[1] - self.transform_shape[0] - 1))
+		# For the construction of the orthogonal matrix
+		self.transform_tril_ind = [pair for pair in zip(*numpy.tril_indices(self.transform_shape[1], -1)) if pair[1] < self.transform_shape[0]]
+		self.transform_tril_ind = tuple([numpy.array(tup) for tup in zip(*self.transform_tril_ind)])
 
 
 	def slow_cost_fun(self, transform):
+		def kernel_correlation(xi, xj):
+			variance = 1
+			diff = xi - xj
+			# leave out the math.pow(2*math.pi*variance, -D/2) coefficient
+			return math.exp(-diff.dot(diff)/(2*variance))
 		# rigid case!
-		cost = -sum(self.kernel_correlation(s, transform.dot(m)) for s in self.scene for m in self.model)
-		print cost
+		cost = -sum(kernel_correlation(s, transform.dot(m)) for s in self.scene for m in self.model)
+		return cost/float(self.model.shape[0])
+
+
+	def get_transform(self, params):
+		"""Obtain an orthogonal rectangular matrix parametrized by a number of params"""
+		t = numpy.eye(*self.transform_shape).T
+		t[self.transform_tril_ind] = params
+		t = scipy.linalg.qr(t, overwrite_a=True, mode='economic')[0]
+		return t.T
+
+
+	counter = 0
+	def cost_fun(self, params):
+		cost = self.mat_cost_fun(self.get_transform(params))
+		self.counter += 1
+		if self.counter % 1000 == 0:
+			print "Iteration " + str(self.counter) + ": " + str(cost)
 		return cost
 
 
-	def fast_cost_fun(self, transform, sigma = 1):
-		D = float(self.scene.shape[1])
-		sig_sq_2 = 2*sigma**2
-		coeff = (math.pi*sig_sq_2)**(-D/2)
+	def mat_cost_fun(self, transform, sig_sq_2=2):
+		"""Calculate the cost for the given transformation"""		
 		# construct the matrix with all combinations of points in the scene
 		# and transformed points in the model, having shape (n, n, scenedim)
 		m_transformed = transform.dot(self.model.T).T
@@ -67,10 +57,33 @@ class KernelCorrelation(object):
  			# array broadcasting trick - subtracting 2D and 1D array
  			# exp works elementwise on all array elements
  			cost = cost - numpy.exp(-numpy.sum((s - m_transformed)**2,axis=-1)/sig_sq_2).sum()
-		print coeff*cost
-		return coeff*cost
+ 		# leave out the coefficient
+		return cost/float(self.model.shape[0])
 
 
-# TODO: Investigate in 2D why/when results from fast_cost_fun and cost_fun differ
-# TODO: Find good value for sigma
-# TODO: What are the limits in terms of array size on my computer?
+	def find_minimum(self, x0=None):
+		if x0 is None:
+			x0 = numpy.zeros((self.scene.shape[1], self.model.shape[1]))
+		# TODO: Test method='Anneal' or 'Powell'
+		result = scipy.optimize.minimize(
+			self.cost_fun,
+			x0,
+			method='Nelder-Mead',
+			tol=1e-8,
+			options={'maxiter': 1000000, 'maxfev':1000000, 'disp': True})
+		return result.x
+
+
+	def find_maximum(self, x0=None):
+		if x0 is None:
+			x0 = numpy.zeros((self.scene.shape[1], self.model.shape[1]))
+		# TODO: Test method='Anneal' or 'Powell'
+		result = scipy.optimize.minimize(
+			(lambda x: -self.cost_fun(x)),
+			x0,
+			method='Nelder-Mead',
+			tol=1e-8,
+			options={'maxiter': 1000, 'disp': True})
+		return result.x
+# http://www.cs.indiana.edu/pub/hanson/Siggraph01QuatCourse/ggndrot.pdf
+# http://www.cs.cmu.edu/~ytsin/KCReg/
