@@ -68,7 +68,7 @@ class KernelCorrelation(object):
 		result = scipy.optimize.minimize(
 			self.cost_fun,
 			x0,
-			method='Nelder-Mead',
+			method='Powell',
 			tol=1e-8,
 			options={'maxiter': 1000000, 'maxfev':1000000, 'disp': True})
 		return result.x

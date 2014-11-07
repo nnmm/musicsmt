@@ -75,7 +75,7 @@ class KernelCorrelationTest(unittest.TestCase):
 		print "test_different_minimizers"
 		numpy.random.seed(0)
 		# 35 for Nelder-Mead
-		scalefactor = 10
+		scalefactor = 4
 		model = numpy.random.rand(self.num_vectors, self.mdim*scalefactor)
 		scene = numpy.random.rand(self.num_vectors, self.sdim*scalefactor)
 		print "model: "
