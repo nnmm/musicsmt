@@ -76,7 +76,32 @@ class WiktionaryDict(object):
 		return single_words
 
 
-if __name__ == '__main__':
-	file_path = '/home/internet/Downloads/dictionaries_enwiktionary/ding/en-fr-enwiktionary.txt'
-	wd = WiktionaryDict(file_path)
-	print wd.get_pos()
+	def check(self, source_word, m, n=1):
+		if source_word in self.unique_shared_translations:
+			target_words = zip(*m[1].most_similar([m[0].syn0norm[m[0].vocab[source_word].index]], topn=n))[0]
+			print source_word + " - " + str(self._dictionary[source_word]) + " - " + str(target_words)
+			for x in range(n):
+				if target_words[x] in self._dictionary[source_word]:
+					return True
+			return False
+
+
+	def unique_translations(self, source, target):
+		"""Create a mapping between vocabularies of word2vec objects source and target"""
+		shared_keys = set(source.vocab.keys()).intersection(set(self._dictionary.keys()))
+		unique_target_vocab = set([])
+		multiples = set([])
+		for v in self._dictionary.values():
+			for word in v:
+				if word in unique_target_vocab:
+					multiples.add(word)
+				unique_target_vocab.add(word)
+		unique_target_vocab.difference_update(multiples)
+
+		shared_values = unique_target_vocab.intersection(set(target.vocab.keys()))
+		# unpack the values from the set
+		unique_translations = {k : next(iter(self._dictionary[k])) for k in shared_keys
+			if len(self._dictionary[k]) == 1}
+		unique_shared_translations = {k: v for k, v in unique_translations.iteritems() if v in shared_values}
+		self.unique_shared_translations = unique_shared_translations
+		return unique_shared_translations

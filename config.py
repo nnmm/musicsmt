@@ -1,3 +1,4 @@
+# all directories relative to the root directory
 model_dir = 'models/'
 data_dir = 'Daten/Corpora/'
-dict_file = '/home/internet/Downloads/dictionaries_enwiktionary/ding/en-fr-enwiktionary.txt'
+dict_file = 'dictionary/en-fr-enwiktionary.txt'
